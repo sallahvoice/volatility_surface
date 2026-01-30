@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.widgets import Button
 from ibapi.client import EClient #needed for our requests
-from ibapi.wrapper import Ewrapper #needed to define where can the server send the requested data back
+from ibapi.wrapper import EWrapper #needed to define where can the server send the requested data back
 from ibapi.contract import Contract #allows us to specify instruments
 from logger import get_logger
 
@@ -14,18 +14,18 @@ logger = get_logger(__file__)
 
 plt.style.use("dark_background")
 
-class LiveSufraceApp(EClient, Ewrapper): #implements both classes 
+class LiveSurfaceApp(EClient, EWrapper): #implements both classes 
 
     def __init__(self):
-        EClient.__init__(self, self): #the class can (send, receive)
+        EClient.__init__(self, self) #the class can (send, receive)
         self.iv_dict = {} #based on reqId
-        self.map_id = {} #each id maps to vol
+        self.id_map = {} #each id maps to vol
         self.expirations = []
         self.strikes = []
         self.spot_price = 0
         self.underlying_conId = 0
-        self.resolved = threading.event()
-        self.chain_resolved = threading.event() #ensures correct code flow
+        self.resolved = threading.Event()
+        self.chain_resolved = threading.Event() #ensures correct code flow
 
     def connectAck(self):
         print("TWS acknowledged connection")
@@ -39,11 +39,11 @@ class LiveSufraceApp(EClient, Ewrapper): #implements both classes
         self.resolved.set() #flagged True,got conId now other threads are awakened
 
     def tickPrice(self, reqId, tickType, price, attr):
-        if reqId = 9999 abd tickType in [4, 9] and price > 0: #we received a spot
+        if reqId == 9999 and tickType in [4, 9] and price > 0: #we received a spot
             self.spot_price = price
 
     def securityDefinitionOptionParameter(self, reqId, exchange, underlyingConId, tradingClass, multiplier, expirations, strikes):
-        if exchange = "SMART":
+        if exchange == "SMART":
             self.expirations = sorted(list(expirations))
             self.strikes = sorted(list(strikes))
             self.chain_resolved.set()
@@ -57,14 +57,14 @@ def run_loop(app):
     app.run()
 
 def start_app(symbol="SPY"):
-    app = LiveSufraceApp()
+    app = LiveSurfaceApp()
     app.connect("127.0.0.1", 7497, clientId=1)
 
-    api_thread = threading.thread(target=run_loop, args=(app, daemon=True))
+    api_thread = threading.Thread(target=run_loop, args=(app,), daemon=True)
     api_thread.start()
     time.sleep(1)
 
-    underlying = contract()
+    underlying = Contract()
     underlying.symbol = symbol
     underlying.secType = "STK"
     underlying.exchange = "SMART"
@@ -87,8 +87,8 @@ def start_app(symbol="SPY"):
 
     req_id = 1000
     for exp in target_exps:
-        for stike in target_stikes:
-            opt = contract()
+        for strike in target_strikes:
+            opt = Contract()
             opt.symbol = symbol
             opt.secType = "OPT"
             opt.exchange = "SMART"
@@ -115,67 +115,67 @@ class PlotState:
         btn_label.set_text("UNLOCK UPDATES" if self.is_locked else "LOCK UPDATES")
         plt.draw()
 
-    def live_desktop_plot(app):
-        plt.ion()
-        fig = plt.figure(figsize=(16,9))
-        fig.canvas.manager.set_window_title("Live Volatility Surface")
-        fig.patch.set_facecolor("#1B1212")
+def live_desktop_plot(app):
+    plt.ion()
+    fig = plt.figure(figsize=(16,9))
+    fig.canvas.manager.set_window_title("Live Volatility Surface")
+    fig.patch.set_facecolor("#1B1212")
 
-        ax_3d = plt.subplot2grid((1, 3), (0, 0), colspan=2, projection="3d")
-        ax_skew = plt.subplot2grid((1,3), (0, 2))
+    ax_3d = plt.subplot2grid((1, 3), (0, 0), colspan=2, projection="3d")
+    ax_skew = plt.subplot2grid((1,3), (0, 2))
 
-        state = plotstate()
-        ax_button = plt.axes([.42, .03, .12, .04])
-        global btn_label
-        btn = Button(ax_button, "LOCK UPDATES", color="1f2329")
-        btn_label = btn.label
-        btn_label.set_color("white")
-        btn_label.set_fontsize(9)
-        btn.on_clicked(state.toggle)
+    state = PlotState()
+    ax_button = plt.axes([.42, .03, .12, .04])
+    global btn_label
+    btn = Button(ax_button, "LOCK UPDATES", color="#1f2329")
+    btn_label = btn.label
+    btn_label.set_color("white")
+    btn_label.set_fontsize(9)
+    btn.on_clicked(state.toggle)
 
-        print("live implied volatility surface started")
+    print("live implied volatility surface started")
 
-        try:
-            while True:
-                if not state.is_locked:
-                    currect_data = []
-                    req_ids = list(app.iv_dict.keys())
-                    for riq in req_ids:
-                        iv = app.iv_dict[riq]
-                        exp, stike = app.id_map[riq]
-                        current_data.append({"Expiry": exp, "Strike": strike, "IV": iv})
+    try:
+        while True:
+            if not state.is_locked:
+                current_data = []
+                req_ids = list(app.iv_dict.keys())
+                for riq in req_ids:
+                    iv = app.iv_dict[riq]
+                    exp, strike = app.id_map.get(riq, (None, None))
+                    current_data.append({"Expiry": exp, "Strike": strike, "IV": iv})
 
-                    if len(current_data) > 10:
-                        df = pd.dataframe(current_data)
-                        pivot = df.pivot_table(index="Expiry", columns="Strike", values="IV").sort_index().sort_index()
-                        pivot = pivot.interpolate(method="linear", axis=0).bfill().ffill() #handles NaN
+            if len(current_data) > 10:
+                df = pd.DataFrame(current_data)
+                pivot = df.pivot_table(index="Expiry", columns="Strike", values="IV").sort_index(axis=1).sort_index()
+                pivot = pivot.interpolate(method="linear", axis=0).bfill().ffill() #handles NaN
 
-                        X, Y_idx = np.meshgrid(pivot.columns, np.arange(len(pivot.index)))
-                        Z = pivot.values
+                X, Y_idx = np.meshgrid(pivot.columns, np.arange(len(pivot.index)))
+                Z = pivot.values
 
-                        curr_elev, curr_azim = ax_3d.elev, ax_3d.azim
+                curr_elev, curr_azim = ax_3d.elev, ax_3d.azim
 
-                        ax_3d.clear()
-                        ax_3d.set_facecolor("#0b0d0f")
-                        ax_3d.plot_surface(X, Y_idx, Z, cmap="magma", egecolor="white", lw=.1, alpha=.9)
-                        ax_3d.set_yticks(np.arange(len(pivot.index)))
-                        ax_3d.set_yticklabels(pivot.index)
-                        ax_3d.set_title(f"Live Volatility Surface | {time.strftime("%H:%M:%S")}", color="white")
-                        ax_3d.view_init(elev=curr_elev, azim=curr_azim)
+                ax_3d.clear()
+                ax_3d.set_facecolor("#0b0d0f")
+                ax_3d.plot_surface(X, Y_idx, Z, cmap="magma", edgecolor="white", lw=.1, alpha=.9)
+                ax_3d.set_yticks(np.arange(len(pivot.index)))
+                ax_3d.set_yticklabels(pivot.index)
+                ax_3d.set_title(f"Live Volatility Surface | {time.strftime('%H:%M:%S')}", color="white")
+                ax_3d.view_init(elev=curr_elev, azim=curr_azim)
 
-                        ax_skew.clear()
-                        ax_skew.set_facecolor("#0b0d0f")
-                        nearest_exp = pivot.index[0]
-                        skew_data = pivot.iloc[0]
-                        ax_skew.set_title(f"Front-Month-Skew {nearest_exp}", color="white")
-                        ax_skew.axvline(x=app.spot_price, color="#C41E3A", linestyle="--")
-                        ax_skew.plot(skew_data.index, skew_data.values, marker="o", color="#0047AB")
+                ax_skew.clear()
+                ax_skew.set_facecolor("#0b0d0f")
+                nearest_exp = pivot.index[0]
+                skew_data = pivot.iloc[0]
+                ax_skew.set_title(f"Front-Month-Skew {nearest_exp}", color="white")
+                ax_skew.axvline(x=app.spot_price, color="#C41E3A", linestyle="--")
+                ax_skew.plot(skew_data.index, skew_data.values, marker="o", color="#0047AB")
 
-                plt.pause(.5)
+            plt.pause(.5)
 
-        except KeyboardInterrupt:
-            app.disconnect()
-            plt.close()
+    except KeyboardInterrupt:
+        app.disconnect()
+        plt.close()
 
 
 if __name__ == "__main__":
