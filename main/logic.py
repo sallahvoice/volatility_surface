@@ -71,7 +71,7 @@ def start_app(symbol="SPY"):
     underlying.currency = "USD"
 
     app.reqContractDetails(1, underlying)
-    app.resolve.wait(timeout=5)
+    app.resolved.wait(timeout=5)
 
     app.reqMktData(9999, underlying, "", False, False, [])
     while app.spot_price == 0:
@@ -137,4 +137,49 @@ class PlotState:
 
         try:
             while True:
-                currect_data = []
+                if not state.is_locked:
+                    currect_data = []
+                    req_ids = list(app.iv_dict.keys())
+                    for riq in req_ids:
+                        iv = app.iv_dict[riq]
+                        exp, stike = app.id_map[riq]
+                        current_data.append({"Expiry": exp, "Strike": strike, "IV": iv})
+
+                    if len(current_data) > 10:
+                        df = pd.dataframe(current_data)
+                        pivot = df.pivot_table(index="Expiry", columns="Strike", values="IV").sort_index().sort_index()
+                        pivot = pivot.interpolate(method="linear", axis=0).bfill().ffill() #handles NaN
+
+                        X, Y_idx = np.meshgrid(pivot.columns, np.arange(len(pivot.index)))
+                        Z = pivot.values
+
+                        curr_elev, curr_azim = ax_3d.elev, ax_3d.azim
+
+                        ax_3d.clear()
+                        ax_3d.set_facecolor("#0b0d0f")
+                        ax_3d.plot_surface(X, Y_idx, Z, cmap="magma", egecolor="white", lw=.1, alpha=.9)
+                        ax_3d.set_yticks(np.arange(len(pivot.index)))
+                        ax_3d.set_yticklabels(pivot.index)
+                        ax_3d.set_title(f"Live Volatility Surface | {time.strftime("%H:%M:%S")}", color="white")
+                        ax_3d.view_init(elev=curr_elev, azim=curr_azim)
+
+                        ax_skew.clear()
+                        ax_skew.set_facecolor("#0b0d0f")
+                        nearest_exp = pivot.index[0]
+                        skew_data = pivot.iloc[0]
+                        ax_skew.set_title(f"Front-Month-Skew {nearest_exp}", color="white")
+                        ax_skew.axvline(x=app.spot_price, color="#C41E3A", linestyle="--")
+                        ax_skew.plot(skew_data.index, skew_data.values, marker="o", color="#0047AB")
+
+                plt.pause(.5)
+
+        except KeyboardInterrupt:
+            app.disconnect()
+            plt.close()
+
+
+if __name__ == "__main__":
+    app_instance = start_app() #pick a ticker if you want
+    print("app started")
+    time.sleep(5)
+    live_desktop_plot(app_instance)
