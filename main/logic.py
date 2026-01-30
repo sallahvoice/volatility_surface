@@ -77,3 +77,23 @@ def start_app(symbol="SPY"):
     while app.spot_price == 0:
         time.sleep(0.1)
     spot = app.spot_price
+
+    app.reqSecDefOptParams(2, symbol, "", "STK", app.underlying_conId)
+    app.chain_resolved.wait(timeout=5)
+
+    today = time.strftime("%Y%m%d")
+    target_exps = [e for e in app.expirations if e >= today][:6]
+    target_strikes = [s for s in app.strikes if spot * 0.98 <= s <= spot * 1.02]
+
+    req_id = 1000
+    for exp in target_exps:
+        for stike in target_stikes:
+            opt = contract()
+            opt.symbol = symbol
+            opt.secType = "OPT"
+            opt.exchange = "SMART"
+            opt.currency = "USD"
+            opt.lastTradeDateOrContractMonth = exp
+            opt.strike = strike
+            opt.right = "C" if strike >= spot else "P"
+            app.id_map[req_id] = (exp, strike)
