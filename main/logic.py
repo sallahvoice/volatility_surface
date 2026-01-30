@@ -97,3 +97,44 @@ def start_app(symbol="SPY"):
             opt.strike = strike
             opt.right = "C" if strike >= spot else "P"
             app.id_map[req_id] = (exp, strike)
+
+            app.reqMktData(req_id, opt, "106", False, False, [])
+            req_id += 1
+            time.sleep(0.1)
+
+    return app
+
+
+class PlotState:
+
+    def __init__(self):
+        self.is_locked = False
+
+    def toggle(self, event):
+        self.is_locked = not self.is_locked
+        btn_label.set_text("UNLOCK UPDATES" if self.is_locked else "LOCK UPDATES")
+        plt.draw()
+
+    def live_desktop_plot(app):
+        plt.ion()
+        fig = plt.figure(figsize=(16,9))
+        fig.canvas.manager.set_window_title("Live Volatility Surface")
+        fig.patch.set_facecolor("#1B1212")
+
+        ax_3d = plt.subplot2grid((1, 3), (0, 0), colspan=2, projection="3d")
+        ax_skew = plt.subplot2grid((1,3), (0, 2))
+
+        state = plotstate()
+        ax_button = plt.axes([.42, .03, .12, .04])
+        global btn_label
+        btn = Button(ax_button, "LOCK UPDATES", color="1f2329")
+        btn_label = btn.label
+        btn_label.set_color("white")
+        btn_label.set_fontsize(9)
+        btn.on_clicked(state.toggle)
+
+        print("live implied volatility surface started")
+
+        try:
+            while True:
+                currect_data = []
