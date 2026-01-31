@@ -9,7 +9,7 @@ from ibapi.client import EClient #needed for our requests
 from ibapi.wrapper import EWrapper #needed to define where can the server send the requested data back
 from ibapi.contract import Contract #allows us to specify instruments
 from logger import get_logger
-
+from db.repositories.surface-repo import SnapshotRepository ,DataPointRepository
 
 
 logger = get_logger(__file__)
@@ -19,7 +19,7 @@ class LiveSurfaceApp(EClient, EWrapper): #implements both classes
 
     def __init__(self):
         EClient.__init__(self, self) #the class can (send, receive)
-        self.iv_dict = {} #based on reqId
+        self.iv_dict = {} #based on reqId0.
         self.id_map = {} #each id maps to vol
         self.expirations = []
         self.strikes = []
@@ -108,43 +108,96 @@ def start_app(symbol="SPY"):
 
 class PlotState:
 
-    def __init__(self):
+    def __init__(self, symbol, app):
         self.is_locked = False
+        self.symbol = symbol
+        self.app = app
+        self.note = ""
+        self.snapshot_repo = SnapshotRepository()
+        self.datapoint_repo = DataPointRepository()
 
-    def toggle(self, event):
+    def toggle_lock(self, event):
         self.is_locked = not self.is_locked
-        btn_label.set_text("UNLOCK UPDATES" if self.is_locked else "LOCK UPDATES")
+        btn_lock_label.set_text("UNLOCK" if self.is_locked else "LOCK")
         plt.draw()
 
-def live_desktop_plot(app):
+    def save_snapshot(self, event):
+        try:
+            snapshot_id = self.snapshot_repo.create_snapshot(
+                symbol=self.symbol,
+                underlying_con_id=self.app.underlying_conId,
+                spot_price=self.app.spot_price,
+                note=self.note if self.note else None
+            )
+            snapshot_id = "SIMULATED"
+
+            data_points = []
+            for req_id, iv in self.app.iv_dict.items():
+                exp_str, strike = self.app.id_map.get(req_id, (None, None))
+                if exp_str and strike:
+                    option_type = "C" if strike >= self.app.spot_price else "P"
+                    data_points.append({
+                        "expiration": exp_str,
+                        "strike": strike,
+                        "implied_vol": iv,
+                        "option_type": option_type
+                        })
+
+            rows = self.datapoint_repo.bulk_insertion(snapshot_id, data_points)
+            logger.info(f"saved snapshot {snapshot_id} with {rows} points")
+            if self.note:
+                print(f"Note: {self.note}")
+
+        except Exception as e:
+            logger.error(f"save failed: {e}")
+
+    def update_note(self, text):
+        self.note = text
+
+
+def live_desktop_plot(app, symbol):
     plt.ion()
     fig = plt.figure(figsize=(16,9))
     fig.canvas.manager.set_window_title("Live Volatility Surface")
     fig.patch.set_facecolor("#1B1212")
 
-    ax_3d = plt.subplot2grid((1, 3), (0, 0), colspan=2, projection="3d")
-    ax_skew = plt.subplot2grid((1,3), (0, 2))
+    ax_3d = plt.subplot2grid((3, 3), (0, 0), colspan=2, rowspan=3, projection="3d")
+    ax_skew = plt.subplot2grid((3,3), (0, 2), rowspan=2)
+    ax_controls = plt.subplot2grid((3,3), (2,2))
+    ax_controls.axis("off")
 
-    state = PlotState()
-    ax_button = plt.axes([.42, .03, .12, .04])
-    global btn_label
-    btn = Button(ax_button, "LOCK UPDATES", color="#1f2329")
-    btn_label = btn.label
-    btn_label.set_color("white")
-    btn_label.set_fontsize(9)
-    btn.on_clicked(state.toggle)
+    state = PlotState(symbol, app)
+    ax_button_lock = plt.axes([.69, .03, .10, .04])
+    global btn_lock_label
+    btn_lock = Button(ax_button_lock, "LOCK", color="#1f2329")
+    btn_lock_label = btn_lock.label
+    btn_lock_label.set_color("white")
+    btn_lock_label.set_fontsize(9)
+    btn_lock.on_clicked(state.toggle_lock)
+
+    ax_btn_save = plt.axes([0.79, 0.03, 0.10, 0.04])
+    btn_save = Button(ax_btn_save, "SAVE", cpmpr="#0d4f1a")
+    btn_save.label.set_color("white")
+    btn_save.label.set_fontsize(9)
+    btn_save.on_clicked(state.save_snapshot)
+
+    ax_textbox = plt.axes([0.68, 0.08, 0.21, 0.04])
+    textbox = textBox(ax_textbox, "Note: ", initial="", color="#1f2329", label_pad=0.01)
+    textBox.label.set_color("white")
+    textBox.label.set_fontsize(9)
+    textbox.on_submit(state.update_note) 
 
     print("live implied volatility surface started")
 
     try:
+        current_data = []
         while True:
             if not state.is_locked:
                 current_data = []
-                req_ids = list(app.iv_dict.keys())
-                for riq in req_ids:
-                    iv = app.iv_dict[riq]
-                    exp, strike = app.id_map.get(riq, (None, None))
-                    current_data.append({"Expiry": exp, "Strike": strike, "IV": iv})
+                for req_id, iv in app.iv_dict.items():
+                    exp, strike = app.id_map.get(req_id, (None, None))
+                    if exp and strike:
+                        current_data.append({"Expiry": exp, "Strike": strike, "IV": iv})
 
             if len(current_data) > 10:
                 df = pd.DataFrame(current_data)
@@ -161,7 +214,10 @@ def live_desktop_plot(app):
                 ax_3d.plot_surface(X, Y_idx, Z, cmap="magma", edgecolor="white", lw=.1, alpha=.9)
                 ax_3d.set_yticks(np.arange(len(pivot.index)))
                 ax_3d.set_yticklabels(pivot.index)
-                ax_3d.set_title(f"Live Volatility Surface | {time.strftime('%H:%M:%S')}", color="white")
+                title = f"Live Vol Surface | {time.strftime('%H:%M:%S')} | {len(current_data)} pts"
+                if state.is_locked:
+                    title += "[LOCKED]"
+                ax_3d.set_title(title, color="white")
                 ax_3d.view_init(elev=curr_elev, azim=curr_azim)
 
                 ax_skew.clear()
@@ -171,16 +227,19 @@ def live_desktop_plot(app):
                 ax_skew.set_title(f"Front-Month-Skew {nearest_exp}", color="white")
                 ax_skew.axvline(x=app.spot_price, color="#C41E3A", linestyle="--")
                 ax_skew.plot(skew_data.index, skew_data.values, marker="o", color="#0047AB")
+                ax_skew.grid(true, alpha=0.2)
 
             plt.pause(.5)
 
     except KeyboardInterrupt:
         app.disconnect()
         plt.close()
+        print("/nDisconnected")
 
 
 if __name__ == "__main__":
-    app_instance = start_app() #pick a ticker if you want
-    print("app started")
+    SYMBOL = "SPY" #pick what you like
+    app_instance = start_app(symbol=SYMBOL) 
+    print(f"app started for {SYMBOL}")
     time.sleep(5)
-    live_desktop_plot(app_instance)
+    live_desktop_plot(app_instancen SYMBOL)
