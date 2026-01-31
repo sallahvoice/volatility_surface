@@ -1,6 +1,6 @@
 from db.engine import database
 
-class BaseRepo:
+class BaseRepository:
     def __init__(self, table_name, pk_column):
         self.table = table_name
         self.pk = pk_column
