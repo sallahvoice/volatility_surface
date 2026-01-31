@@ -5,7 +5,7 @@ from logger import get_logger
 logger = get_logger(__file__)
 
 
-class SnapshotRepo(BaseRepository):
+class SnapshotRepository(BaseRepository):
     super().__init__("surface_snapshots", "snapshot_id")
 
     def create_snapshot(self, symbol, underlying_con_id, spot_price, note=None):
@@ -29,7 +29,7 @@ class SnapshotRepo(BaseRepository):
             return cursor.fetchall()
 
 
-class DataPointRepo(BaseRepository):
+class DataPointRepository(BaseRepository):
     super().__init__("suface_data_points", "data_point_id")
 
     def bulk_insertion(self, snapshot_id, data_points):
