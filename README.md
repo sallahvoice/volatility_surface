@@ -1,1 +1,1 @@
-#this repo creates a live volatility surface, stores relevant data in a mysql db
+#this repo creates a live volatility surface using interactive brokers EClient and EWrapper, stores relevant data in a mysql db
