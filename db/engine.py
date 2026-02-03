@@ -1,10 +1,20 @@
 from contextlib import contextmanager
+
 from mysql.connector import Error, pooling
-from db.config import (db_host, db_port,
-db_user, db_password, db_name, db_pool_size, db_pool_name)
+
+from db.config import (
+    db_host,
+    db_name,
+    db_password,
+    db_pool_name,
+    db_pool_size,
+    db_port,
+    db_user,
+)
 from logger import get_logger
 
 logger = get_logger(__file__)
+
 
 def create_db_pool():
     try:
@@ -15,7 +25,7 @@ def create_db_pool():
             db_password=db_password,
             db_name=db_name,
             db_pool_size=db_pool_size,
-            db_pool_name=db_pool_name
+            db_pool_name=db_pool_name,
         )
     except Exception as e:
         logger.info("failed to create database pool: %s", e)

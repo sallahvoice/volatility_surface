@@ -1,10 +1,18 @@
 from pathlib import Path
+
 import mysql.connector
-from db.config import (db_host, db_port,
-db_user, db_password, db_name, db_pool_size, db_pool_name)
+
+from db.config import (
+    db_host,
+    db_name,
+    db_password,
+    db_port,
+    db_user,
+)
 from logger import get_logger
 
 logger = get_logger(__file__)
+
 
 def run_migration():
     migration_dir = Path(__file__).parent / "migrations"
@@ -15,7 +23,7 @@ def run_migration():
         db_port=db_port,
         db_user=db_user,
         db_password=db_password,
-        db_name=db_name
+        db_name=db_name,
     )
 
     cursor = conn.cursor()

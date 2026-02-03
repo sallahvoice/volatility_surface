@@ -1,5 +1,6 @@
 from db.engine import database
 
+
 class BaseRepository:
     def __init__(self, table_name, pk_column):
         self.table = table_name
@@ -7,7 +8,7 @@ class BaseRepository:
 
     def create(self, data: dict):
         columns = ", ".join(data.keys())
-        placeholder = ", ".join(["%s"]*len(data))
+        placeholder = ", ".join(["%s"] * len(data))
         query = f"INSERT INTO {self.table} ({columns}) VALUES {placeholder}"
         with database.get_cursor() as cursor:
             cursor.execute(query, tuple(data.values()))

@@ -1,5 +1,5 @@
-from db.repositories.base_repo import BaseRepository
 from db.engine import database
+from db.repositories.base_repo import BaseRepository
 from logger import get_logger
 
 logger = get_logger(__file__)
