@@ -106,33 +106,6 @@ if __name__ == "__main__":
 
 ---
 
-## Project Structure
-
-```
-├── db/
-│   ├── config.py               # DB credentials from .env
-│   ├── engine.py               # Connection pool + context managers
-│   ├── __init__.py
-│   ├── migrate.py              # Migration runner
-│   ├── migrations
-│       └── 001_surface_table.sql
-│   ├── base_repo.py            # Generic CRUD base class
-│   ├── surface_repo.py         # Snapshot and data point repos
-│
-│   └── migrations/
-│       └── 001_surface_tables.sql
-│   └── repositories
-│       ├── base_repo.py
-│       ├── __init__.py
-│       └── surface_repo.py
-├── main/
-│   ├── logic.py                # app logic
-├── logger.py                   # Logging setup
-├── .env                        # Database credentials (not committed)
-└── exceptions.py               # custom exception classes
-```
-
-
 ## How It Works
 
 ```
