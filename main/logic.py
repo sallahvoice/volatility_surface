@@ -1,16 +1,19 @@
 import threading
 import time
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from matplotlib.widgets import Button, TextBox
-from ibapi.client import EClient #needed for our requests
-from ibapi.wrapper import EWrapper #needed to define where can the server send the requested data back
-from ibapi.contract import Contract #allows us to specify instruments
-from logger import get_logger
-from db.repositories.surface-repo import SnapshotRepository ,DataPointRepository
 
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from ibapi.client import EClient  # needed for our requests
+from ibapi.contract import Contract  # allows us to specify instruments
+from ibapi.wrapper import \
+    EWrapper  # needed to define where can the server send the requested data back
+from matplotlib.widgets import Button, TextBox
+from mpl_toolkits.mplot3d import Axes3D
+
+from db.repositories.surface-repo import (DataPointRepository,
+                                          SnapshotRepository)
+from logger import get_logger
 
 logger = get_logger(__file__)
 plt.style.use("dark_background")
@@ -19,7 +22,7 @@ class LiveSurfaceApp(EClient, EWrapper): #implements both classes
 
     def __init__(self):
         EClient.__init__(self, self) #the class can (send, receive)
-        self.iv_dict = {} #based on reqId0.
+        self.iv_dict = {} #based on reqId.
         self.id_map = {} #each id maps to vol
         self.expirations = []
         self.strikes = []
